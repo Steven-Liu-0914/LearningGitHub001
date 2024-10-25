@@ -1,41 +1,43 @@
-syncSimulPiDetailsForm: rxMethod<
-        BaseResponse<GetSimulationPiDto> | undefined
-      >(
-        pipe(
-          filter((response) => !!response),
-          tap((response) => {
-            const form = store.simulPiDetailsForm();
-            const simulPiDetails = response.data;
+syncSimulPiDetailsForm(data: any): Promise<void> {
+  return new Promise((resolve, reject) => {
+    try {
+      const form = store.simulPiDetailsForm();
+      const simulPiDetails = data;
 
-            patchState(store, {
-              creditFileId: response.data.id,
-              deviceId: response.data.deviceId,
-              creditFileName: response.data.fileName,
-            });
-            // Patch name, description, exchangeRate, amount, currency
-            // to allow their toSignal counterparts to be updated.
-            form.patchValue({
-              name: simulPiDetails.fileName,
-              description: simulPiDetails.description,
-              exchangeRate: simulPiDetails.exchangeRate,
-              amount: simulPiDetails.amount,
-              currency: simulPiDetails.currency,
-            });
-            form.markAsPristine();                                
-          }),       
-        ),
-      ),      
+      patchState(store, {
+        creditFileId: simulPiDetails.id,
+        deviceId: simulPiDetails.deviceId,
+        creditFileName: simulPiDetails.fileName,
+      });
 
-      async getCalculationResult(deviceId: number) {
-        const response = await store.getResponse(
-          calculationService.getCalculationResult(deviceId),
-        );
-        patchState(store, { calculationResult: response.data });
-      },
+      form.patchValue({
+        name: simulPiDetails.fileName,
+        description: simulPiDetails.description,
+        exchangeRate: simulPiDetails.exchangeRate,
+        amount: simulPiDetails.amount,
+        currency: simulPiDetails.currency,
+      });
+      form.markAsPristine();
 
- ngOnInit(): void {
-    void this.#store.loadPiSimulationReferentials();
-    this.#store.syncSimulPiDetailsForm(this.piSimulationGetQuery.data);
-    this.#store.syncExchangeRate(this.getExchangeRateQuery.data);
-    void this.#store.getCalculationResult(this.deviceId() ?? 0).then(() => this.updateCalculationError());
+      // Resolve the promise after everything is done
+      resolve();
+    } catch (error) {
+      reject(error); // Reject if something went wrong
+    }
+  });
+}
+
+
+async ngOnInit(): Promise<void> {
+  try {
+    await this.#store.syncSimulPiDetailsForm(this.piSimulationGetQuery.data);
+    await this.#store.getCalculationResult(this.deviceId() ?? 0);
+    this.updateCalculationError();
+  } catch (error) {
+    console.error('Error occurred:', error);
   }
+
+  // Other initializations
+  void this.#store.loadPiSimulationReferentials();
+  this.#store.syncExchangeRate(this.getExchangeRateQuery.data);
+}
