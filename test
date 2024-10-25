@@ -1,0 +1,41 @@
+syncSimulPiDetailsForm: rxMethod<
+        BaseResponse<GetSimulationPiDto> | undefined
+      >(
+        pipe(
+          filter((response) => !!response),
+          tap((response) => {
+            const form = store.simulPiDetailsForm();
+            const simulPiDetails = response.data;
+
+            patchState(store, {
+              creditFileId: response.data.id,
+              deviceId: response.data.deviceId,
+              creditFileName: response.data.fileName,
+            });
+            // Patch name, description, exchangeRate, amount, currency
+            // to allow their toSignal counterparts to be updated.
+            form.patchValue({
+              name: simulPiDetails.fileName,
+              description: simulPiDetails.description,
+              exchangeRate: simulPiDetails.exchangeRate,
+              amount: simulPiDetails.amount,
+              currency: simulPiDetails.currency,
+            });
+            form.markAsPristine();                                
+          }),       
+        ),
+      ),      
+
+      async getCalculationResult(deviceId: number) {
+        const response = await store.getResponse(
+          calculationService.getCalculationResult(deviceId),
+        );
+        patchState(store, { calculationResult: response.data });
+      },
+
+ ngOnInit(): void {
+    void this.#store.loadPiSimulationReferentials();
+    this.#store.syncSimulPiDetailsForm(this.piSimulationGetQuery.data);
+    this.#store.syncExchangeRate(this.getExchangeRateQuery.data);
+    void this.#store.getCalculationResult(this.deviceId() ?? 0).then(() => this.updateCalculationError());
+  }
