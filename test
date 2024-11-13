@@ -1,340 +1,55 @@
-import { computed, inject } from '@angular/core';
-import { toSignal } from '@angular/core/rxjs-interop';
-import { PristineChangeEvent } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
-import {
-  BaseResponse,
-  ExchangeRateResponse,
-  OptionModel,
-} from '@crew/shared/model';
-import { withRequest } from '@crew/shared/store';
-import {
-  patchState,
-  signalStore,
-  withComputed,
-  withMethods,
-  withState,
-} from '@ngrx/signals';
-import { rxMethod } from '@ngrx/signals/rxjs-interop';
-import { OidcSecurityService } from 'angular-auth-oidc-client';
-import { formatISO } from 'date-fns';
-import { debounceTime, filter, lastValueFrom, map, pipe, tap } from 'rxjs';
+ static Tuple<KafkaSettings, ConsumerConfig> GetUnicornConsumerBySetting(IConfiguration config)
+ {
+     KafkaSettings setting = new();
+     config.GetRequiredSection("Kafka-XGit").Bind(setting);
+     return new Tuple<KafkaSettings, ConsumerConfig>(setting,
+         new ConsumerConfig
+         {
+             BootstrapServers = setting.BootstrapServers,
+             SaslKerberosServiceName = setting.ServiceName,
+             GroupId = setting.GroupId,
+             AutoOffsetReset = AutoOffsetReset.Latest,
+             SecurityProtocol = SecurityProtocol.SaslSsl,
+             SaslMechanism = SaslMechanism.Gssapi,
+             SslCaLocation = "",
+             Debug = setting.DebugMode,
+             EnableSslCertificateVerification = setting.EnableSslCertificateVerification,
+             EnableAutoCommit = true,
+             StatisticsIntervalMs = 10000,
+             SessionTimeoutMs = 10000,
+             EnablePartitionEof = setting.EnablePartitionEof,
+             PartitionAssignmentStrategy = PartitionAssignmentStrategy.Range,
+         });
+ }
+ #endregion
 
-import {
-  CalculationResultService,
-  SimulationAccessRightsService,
-} from '../../api';
-import {
-  AplResponseResult,
-  ClientDetailsSearch,
-  DeleteClientParams,
-  GetSimulationPiDto,
-  PiSimulationCalculation,
-  PiSimulationDetails,
-  SimulationRights,
-} from '../../model';
-import { injectPiSimulationDetailForm } from './pi-simulation-form-injector';
-import { withPiSimulationReferentials } from './with-pi-simulation-referentials';
 
-export const PiSimulationStore = signalStore(
-  { protectedState: false },
-  withPiSimulationReferentials(),
-  withRequest(),
-  withState({
-    creditFileId: null as number | null,
-    deviceId: null as number | null,
-    creditFileName: '',
-    isReadOnly: false,
-    piSimulationCalculation: {
-      calculationResult: null,
-      netPi: null,
-      evaBrut: null,
-      evaBrutCurrency: null,
-      rwa: null,
-      rwaCurrency: null,
-      ecl: null,
-    } as PiSimulationCalculation,
-    calculationResult: {
-      container: null,
-      simulation_error: null,
-      performance: null,
-    } as AplResponseResult,
-  }),
-  withComputed(() => {
-    const simulPiDetailsForm = injectPiSimulationDetailForm();
-    const simulPiDetailsFormStatus = toSignal(
-      simulPiDetailsForm.statusChanges,
+  public static void AddConsumers(this WebApplicationBuilder builder)
+  {
+      if (builder.Configuration.GetValue<bool>("Kafka-XGit:EnableConsumers"))
       {
-        initialValue: simulPiDetailsForm.status,
-      },
-    );
+          Tuple<KafkaSettings, ConsumerConfig> appConfig = KafkaConfigurationHelper.GetConsumerConfiguration(builder.Configuration, KafkaServiceType.UnicornXGit);
 
-    const fileNameControl = simulPiDetailsForm.controls.name;
-    const fileName = toSignal(fileNameControl.valueChanges, {
-      initialValue: fileNameControl.value,
-    });
-    const descriptionControl = simulPiDetailsForm.controls.description;
-    const description = toSignal(descriptionControl.valueChanges, {
-      initialValue: descriptionControl.value,
-    });
-
-    const currencyControl = simulPiDetailsForm.controls.currency;
-    const isCurrencyPristine = toSignal(
-      currencyControl.events.pipe(
-        filter((event) => event instanceof PristineChangeEvent),
-        map((event) => event.pristine),
-      ),
-      { initialValue: currencyControl.pristine },
-    );
-    const currency = toSignal(currencyControl.valueChanges, {
-      initialValue: currencyControl.value,
-    });
-
-    const amountControl = simulPiDetailsForm.controls.amount;
-    const isAmountPristine = toSignal(
-      amountControl.events.pipe(
-        filter((event) => event instanceof PristineChangeEvent),
-        map((event) => event.pristine),
-      ),
-      { initialValue: amountControl.pristine },
-    );
-    const amount = toSignal(
-      amountControl.valueChanges.pipe(debounceTime(500)),
-      {
-        initialValue: amountControl.value,
-      },
-    );
-    return {
-      getExchangeRateDto: computed(() => {
-        amount(); // To trigger exchange rate query whenever amount changes
-        return { currency: currency(), date: formatISO(new Date()) };
-      }),
-      simulPiDetailsForm: computed(() => simulPiDetailsForm),
-      currency,
-      amount,
-      fileName,
-      description,
-      formStatus: simulPiDetailsFormStatus,
-      isFormInValid: computed(() => simulPiDetailsFormStatus() === 'INVALID'),
-      isAmountPristine,
-      isCurrencyPristine,
-    };
-  }),
-
-  withMethods((store) => {
-    const simulationAccessRightService = inject(SimulationAccessRightsService);
-    const oidcSecurityService = inject(OidcSecurityService);
-    const simulPiDetailsForm = store.simulPiDetailsForm();
-    const router = inject(Router);
-    const activatedRoute = inject(ActivatedRoute);
-    const calculationService = inject(CalculationResultService);
-    /**
-     * @deprecated This function has been replaced by tanstack query
-     * and other rxMethod. DO NOT USE IT ANYMORE
-     * @param creditFileId
-     */
-    const loadPiSimulation = async (creditFileId: number) => {
-      // To create a service that properly manage user data,
-      // intead of directly calling oidcSecurityService, to provide
-      // strongly-typed UserData.
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      const currentUser = await lastValueFrom(
-        oidcSecurityService.getUserData(),
-      );
-      const getAccessRightResponse = await lastValueFrom(
-        simulationAccessRightService.getSimulationAccessRights(creditFileId),
-      );
-      const currentAccessRights = getAccessRightResponse.data.find(
-        // Need to strongly-type UserData for safely accessing user data.
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-        (accessRight) => accessRight.utCode === currentUser.utcode,
-      );
-      if (currentAccessRights) {
-        patchState(store, {
-          piSimulationCalculation: {
-            calculationResult: Math.random() < 0.5,
-            netPi: 0.02694,
-            evaBrut: 1447012.30064,
-            evaBrutCurrency: 'EUR',
-            rwa: 30204320.22,
-            rwaCurrency: 'EUR',
-            ecl: 'N/A',
-          },
-        });
-
-        // Patch simulation details form if access granted
-        const detail: PiSimulationDetails = {
-          name: 'Simulation PI',
-          description:
-            'Retrieval of existing Simulation PI has not been implemented',
-          amount: 30204320.3303,
-          currency: 'EUR',
-          exchangeRate: 0,
-        };
-
-        patchState(store, {
-          creditFileId: creditFileId,
-          creditFileName: detail.name ?? '',
-        });
-
-        simulPiDetailsForm.patchValue(detail);
-        const rights = currentAccessRights.rights as SimulationRights;
-        // Disable simulation detail form if read-only access
-        if (rights === SimulationRights.READER) {
-          patchState(store, { isReadOnly: true });
-          simulPiDetailsForm.disable();
-        }
+          builder.Services.AddMassTransit<IRefreshXGitBusControl>(x =>
+          {
+              x.UsingInMemory((context, cfg) => cfg.ConfigureEndpoints(context));
+              x.AddRider(riderCfg =>
+              {
+                  riderCfg.AddConsumer<RefreshXGitCpyConsumer>();
+                  riderCfg.UsingKafka((context, kafkaCfg) =>
+                  {
+                      kafkaCfg.Host(builder.Configuration.GetValue<string>("Kafka-XGit:BootstrapServers"));
+                      kafkaCfg.SetSerializationFactory(new CustomKafkaXmlSerializerFactory<BODY>(new ContentType(@"application/xml")));
+                      kafkaCfg.TopicEndpoint<Ignore, BODY>(appConfig.Item1.Topic, appConfig.Item2, topicCfg =>
+                      {
+                          topicCfg.ConcurrentMessageLimit = appConfig.Item1.ConcurrentMessageLimit;
+                          topicCfg.EnablePartitionEof = appConfig.Item1.EnablePartitionEof;
+                          topicCfg.SetKeyDeserializer(Deserializers.Ignore);
+                          UseRetryConfiguration(topicCfg);
+                          topicCfg.ConfigureConsumer<RefreshXGitCpyConsumer>(context);
+                      });
+                  });
+              });
+          });
       }
-    };
-
-    return {
-      loadPiSimulation,
-      syncExchangeRate: rxMethod<
-        BaseResponse<ExchangeRateResponse> | undefined
-      >(
-        pipe(
-          filter((response) => !!response),
-          tap((response) => {
-            const form = store.simulPiDetailsForm();
-            const data = response.data;
-            form.patchValue({
-              exchangeRate: data.exchangeRate,
-            });
-          }),
-        ),
-      ),
-      syncSimulPiDetailsForm: rxMethod<
-        BaseResponse<GetSimulationPiDto> | undefined
-      >(
-        pipe(
-          filter((response) => !!response),
-          tap((response) => {
-            const form = store.simulPiDetailsForm();
-            const simulPiDetails = response.data;
-            patchState(store, {
-              creditFileId: response.data.id,
-              deviceId: response.data.deviceId,
-              creditFileName: response.data.fileName,
-            });
-            // Patch name, description, exchangeRate, amount, currency
-            // to allow their toSignal counterparts to be updated.
-            form.patchValue({
-              name: simulPiDetails.fileName,
-              description: simulPiDetails.description,
-              exchangeRate: simulPiDetails.exchangeRate,
-              amount: simulPiDetails.amount,
-              currency: simulPiDetails.currency,
-            });
-            form.markAsPristine();
-          }),
-        ),
-      ),
-
-      async getCalculationResult(deviceId: number) {
-        const response = await store.getResponse(
-          calculationService.getCalculationResult(deviceId),
-        );
-        patchState(store, { calculationResult: response.data });
-      },
-
-      reloadRouteId: async (simulationId: number) => {
-        await router.navigate([simulationId], {
-          relativeTo: activatedRoute,
-          replaceUrl: true,
-        });
-      },
-      goToCreateAuthorization: async () => {
-        await router.navigate(
-          [store.creditFileId(), store.deviceId(), 'authorization'],
-          {
-            relativeTo: activatedRoute,
-          },
-        );
-      },
-      groupActionList: () => {
-        const groupActionList: OptionModel[] = [
-          {
-            code: 0,
-            additionalField: { icon: 'content_copy' },
-            label: 'Duplicate',
-          },
-          {
-            code: 1,
-            additionalField: { icon: 'delete_outline' },
-            label: 'Delete',
-          },
-        ];
-        return groupActionList;
-      },
-
-      deleteClient: rxMethod<BaseResponse<DeleteClientParams | undefined>>(
-        pipe(
-          filter((response) => !!response),
-          tap((response) => {
-            return response;
-          }),
-        ),
-      ),
-      duplicateClient: rxMethod<BaseResponse<number[]> | undefined>(
-        pipe(
-          filter((response) => !!response),
-          tap((response) => {
-            return response;
-          }),
-        ),
-      ),
-      goToClient: async (client: ClientDetailsSearch) => {
-        const clientPath = 'client';
-        if (client.clientId) {
-          await router.navigate(
-            [store.creditFileName(), clientPath, client.type, client.clientId],
-            {
-              relativeTo: activatedRoute,
-            },
-          );
-        } else if (client.korusId) {
-          await router.navigate(
-            [
-              store.creditFileId(),
-              store.deviceId(),
-              store.creditFileName(),
-              clientPath,
-              client.type,
-              client.korusId,
-            ],
-            {
-              relativeTo: activatedRoute,
-            },
-          );
-        } else if (client.kycId) {
-          await router.navigate(
-            [
-              store.creditFileId(),
-              store.deviceId(),
-              store.creditFileName(),
-              clientPath,
-              client.type,
-              client.kycId,
-            ],
-            {
-              relativeTo: activatedRoute,
-            },
-          );
-        } else {
-          //Create manual client
-          await router.navigate(
-            [
-              store.creditFileId(),
-              store.deviceId(),
-              store.creditFileName(),
-              clientPath,
-            ],
-            {
-              relativeTo: activatedRoute,
-            },
-          );
-        }
-      },
-    };
-  }),
-);
+  }
