@@ -1,0 +1,88 @@
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.Simulation.Model;
+using CREW.Core.Models.Response;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace CACIB.CREW.IntegrationTests.Features.Simulation
+{
+    public class CreatePiSimulationAuthorizationTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Create_PiSimulationAuthorization_Success_Response()
+        {
+            // Arrange
+            var request = new
+            {
+                SimulationId = 12345,
+                UserId = "test_user",
+                Role = "Approver",
+                AuthorizationType = "ReadWrite",
+                ValidFrom = "2025-01-01",
+                ValidTo = "2025-12-31"
+            };
+            var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
+
+            // Act
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationRoutes.CreateAuthorization, content);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<SaveAuthorizationResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.Equal("Success", respData?.Status); // Adjust based on actual response structure
+        }
+
+        [Fact]
+        public async Task Create_PiSimulationAuthorization_BadRequest_Response()
+        {
+            // Arrange
+            var request = new
+            {
+                // Missing required fields to simulate a bad request
+                UserId = "test_user"
+            };
+            var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
+
+            // Act
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationRoutes.CreateAuthorization, content);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType); // Adjust based on actual error structure
+        }
+
+        [Fact]
+        public async Task Create_PiSimulationAuthorization_NotFound_Response()
+        {
+            // Arrange
+            var request = new
+            {
+                SimulationId = 99999, // Non-existent Simulation ID to trigger a not found
+                UserId = "test_user",
+                Role = "Approver",
+                AuthorizationType = "ReadWrite",
+                ValidFrom = "2025-01-01",
+                ValidTo = "2025-12-31"
+            };
+            var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
+
+            // Act
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationRoutes.CreateAuthorization, content);
+            string responseContent = await response.Content.ReadAsStringAsync();
+
+            // Assert
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.True(string.IsNullOrEmpty(responseContent)); // Adjust based on actual error handling
+        }
+    }
+}
