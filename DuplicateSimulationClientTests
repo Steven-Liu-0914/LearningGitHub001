@@ -1,0 +1,91 @@
+﻿#nullable disable
+
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.Simulation.Model;
+using CREW.Core.Infrastructure.Models;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Simulation
+{
+    public class DuplicateSimulationClientTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Duplicate_Simulation_Client_Success()
+        {
+            // Arrange: Provide valid request data for the duplicate simulation client
+            var requestBody = new DuplicateSimulationClientRequest
+            {
+                ClientId = 12345, // Example valid client ID
+                SimulationType = "Standard" // Example valid simulation type
+            };
+
+            var command = new Request(requestBody);
+
+            // Act: Send the POST request to the API
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationPiRoutes.DuplicateSimulationClient,
+                new StringContent(JsonConvert.SerializeObject(command), System.Text.Encoding.UTF8, "application/json"));
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<BaseResponse>(responseContent);
+
+            // Assert: Check that the response status is 200 OK and validate the response data
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.True(respData?.Data); // Assuming Data is a boolean property indicating success
+        }
+
+        [Fact]
+        public async Task Duplicate_Simulation_Client_NotFound()
+        {
+            // Arrange: Provide a non-existent client ID
+            var requestBody = new DuplicateSimulationClientRequest
+            {
+                ClientId = 99999, // Example non-existent client ID
+                SimulationType = "Premium" // Example valid simulation type
+            };
+
+            var command = new Request(requestBody);
+
+            // Act: Send the POST request to the API
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationPiRoutes.DuplicateSimulationClient,
+                new StringContent(JsonConvert.SerializeObject(command), System.Text.Encoding.UTF8, "application/json"));
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert: Check that the response status is 404 Not Found
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("Client Not Found", respError?.ErrorType); // Example error message
+        }
+
+        [Fact]
+        public async Task Duplicate_Simulation_Client_BadRequest()
+        {
+            // Arrange: Provide invalid data (e.g., missing client ID)
+            var requestBody = new DuplicateSimulationClientRequest
+            {
+                ClientId = -1, // Example invalid client ID (negative value)
+                SimulationType = "" // Example invalid simulation type (empty string)
+            };
+
+            var command = new Request(requestBody);
+
+            // Act: Send the POST request to the API
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationPiRoutes.DuplicateSimulationClient,
+                new StringContent(JsonConvert.SerializeObject(command), System.Text.Encoding.UTF8, "application/json"));
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert: Check that the response status is 400 BadRequest due to invalid parameters
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("Bad Request", respError?.ErrorType); // Example error message
+        }
+    }
+}
