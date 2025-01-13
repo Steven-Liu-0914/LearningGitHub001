@@ -1,0 +1,69 @@
+﻿#nullable disable
+
+using CACIB.CREW.Api.Features.Simulation.Model;
+using CREW.Core.Infrastructure.Models;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Simulation
+{
+    public class GetAuthorizationTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Get_Authorization_Success()
+        {
+            // Arrange: Provide a valid AuthorizationId
+            int authorizationId = 12345; // Example valid authorization ID
+
+            // Act: Send the GET request to the API
+            var response = await _client.GetAsync(ApiRouteConstants.SimulationRoutes.GetAuthorization + $"/{authorizationId}");
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<GetAuthorizationResponse>(responseContent);
+
+            // Assert: Check that the response status is 200 OK and validate the response data
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.Equal(authorizationId, respData?.AuthorizationId); // Ensure that the returned authorization matches the request ID
+        }
+
+        [Fact]
+        public async Task Get_Authorization_NotFound()
+        {
+            // Arrange: Provide a non-existent AuthorizationId
+            int authorizationId = 99999; // Example non-existent authorization ID
+
+            // Act: Send the GET request to the API
+            var response = await _client.GetAsync(ApiRouteConstants.SimulationRoutes.GetAuthorization + $"/{authorizationId}");
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert: Check that the response status is 404 Not Found
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("Authorization Not Found", respError?.ErrorType); // Example error message
+        }
+
+        [Fact]
+        public async Task Get_Authorization_BadRequest()
+        {
+            // Arrange: Provide an invalid AuthorizationId (e.g., negative value)
+            int authorizationId = -1; // Example invalid authorization ID
+
+            // Act: Send the GET request to the API
+            var response = await _client.GetAsync(ApiRouteConstants.SimulationRoutes.GetAuthorization + $"/{authorizationId}");
+
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert: Check that the response status is 400 BadRequest due to invalid parameter
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("Bad Request", respError?.ErrorType); // Example error message
+        }
+    }
+}
