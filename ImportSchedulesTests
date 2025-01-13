@@ -1,0 +1,117 @@
+#nullable disable
+
+using CACIB.CREW.Api.Features.Authorization.Model;
+using CREW.Core.Infrastructure.Models;
+using Microsoft.AspNetCore.Mvc.Testing;
+using System.Net;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Authorization
+{
+    public class ImportSchedulesTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client;
+
+        public ImportSchedulesTests()
+        {
+            _client = factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+        }
+
+        [Fact]
+        public async Task ImportSchedules_Success()
+        {
+            // Arrange: Prepare valid request data and file
+            var requestContent = new MultipartFormDataContent
+            {
+                { new StringContent("2023-01-01"), "StartDate" },
+                { new StringContent("2023-12-31"), "EndDate" },
+                { new StringContent("10000"), "AuthorizedAmount" },
+                { new StringContent("Level1"), "AssignmentLevel" },
+                { new StringContent("1"), "AssignmentLevelId" },
+                { new StreamContent(File.OpenRead("valid-schedules.xlsx")), "File", "valid-schedules.xlsx" }
+            };
+
+            // Act: Send POST request to the endpoint
+            var response = await _client.PostAsync(ApiRouteConstants.AuthorizationRoutes.ImportSchedule, requestContent);
+
+            // Assert: Verify the response
+            response.EnsureSuccessStatusCode();
+            var result = await response.Content.ReadFromJsonAsync<ImportScheduleResponse>();
+            Assert.NotNull(result);
+            Assert.True(result.IsSuccess);
+        }
+
+        [Fact]
+        public async Task ImportSchedules_MissingFile_ReturnsBadRequest()
+        {
+            // Arrange: Prepare request without file
+            var requestContent = new MultipartFormDataContent
+            {
+                { new StringContent("2023-01-01"), "StartDate" },
+                { new StringContent("2023-12-31"), "EndDate" },
+                { new StringContent("10000"), "AuthorizedAmount" },
+                { new StringContent("Level1"), "AssignmentLevel" },
+                { new StringContent("1"), "AssignmentLevelId" }
+            };
+
+            // Act: Send POST request
+            var response = await _client.PostAsync(ApiRouteConstants.AuthorizationRoutes.ImportSchedule, requestContent);
+
+            // Assert: Verify 400 Bad Request
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task ImportSchedules_InvalidFileContent_ReturnsValidationErrors()
+        {
+            // Arrange: Prepare invalid file content
+            var requestContent = new MultipartFormDataContent
+            {
+                { new StringContent("2023-01-01"), "StartDate" },
+                { new StringContent("2023-12-31"), "EndDate" },
+                { new StringContent("10000"), "AuthorizedAmount" },
+                { new StringContent("Level1"), "AssignmentLevel" },
+                { new StringContent("1"), "AssignmentLevelId" },
+                { new StreamContent(File.OpenRead("invalid-schedules.xlsx")), "File", "invalid-schedules.xlsx" }
+            };
+
+            // Act: Send POST request
+            var response = await _client.PostAsync(ApiRouteConstants.AuthorizationRoutes.ImportSchedule, requestContent);
+
+            // Assert: Verify response with validation errors
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var errors = await response.Content.ReadAsStringAsync();
+            Assert.Contains("Invalid Date Format", errors);
+            Assert.Contains("Invalid Due Amount", errors);
+        }
+
+        [Fact]
+        public async Task ImportSchedules_UnauthorizedRequest_ReturnsUnauthorized()
+        {
+            // Arrange: Remove authorization header
+            _client.DefaultRequestHeaders.Authorization = null;
+
+            var requestContent = new MultipartFormDataContent
+            {
+                { new StringContent("2023-01-01"), "StartDate" },
+                { new StringContent("2023-12-31"), "EndDate" },
+                { new StringContent("10000"), "AuthorizedAmount" },
+                { new StringContent("Level1"), "AssignmentLevel" },
+                { new StringContent("1"), "AssignmentLevelId" },
+                { new StreamContent(File.OpenRead("valid-schedules.xlsx")), "File", "valid-schedules.xlsx" }
+            };
+
+            // Act: Send POST request
+            var response = await _client.PostAsync(ApiRouteConstants.AuthorizationRoutes.ImportSchedule, requestContent);
+
+            // Assert: Verify unauthorized response
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        }
+    }
+}
