@@ -1,0 +1,82 @@
+﻿#nullable disable
+
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.Lgd.Simulation.Model;
+using CREW.Core.Infrastructure.Models;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Simulation
+{
+    public class DuplicateLGDSimulationTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Duplicate_LGD_Simulation_Success()
+        {
+            // Arrange: Provide valid lgd simulation ID and name
+            long lgdSimulationId = 12345; // Example valid lgd simulation ID
+            string lgdSimulationName = "Test Simulation"; // Example valid name
+
+            var requestBody = new DuplicateLgdSimulationCommand(lgdSimulationId, lgdSimulationName);
+
+            // Act: Send the POST request to the API
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationRoutes.DuplicateLGDSimulation,
+                new StringContent(JsonConvert.SerializeObject(requestBody), System.Text.Encoding.UTF8, "application/json"));
+            
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<LgdProjectSimulationResponse>(responseContent);
+
+            // Assert: Check that the response status is 200 OK and validate the response data
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.Equal(lgdSimulationId, respData?.SimulationId); // Assuming the response contains the same ID
+        }
+
+        [Fact]
+        public async Task Duplicate_LGD_Simulation_NotFound()
+        {
+            // Arrange: Provide a non-existent lgd simulation ID
+            long lgdSimulationId = 99999; // Example non-existent lgd simulation ID
+            string lgdSimulationName = "NonExistent Simulation";
+
+            var requestBody = new DuplicateLgdSimulationCommand(lgdSimulationId, lgdSimulationName);
+
+            // Act: Send the POST request to the API
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationRoutes.DuplicateLGDSimulation,
+                new StringContent(JsonConvert.SerializeObject(requestBody), System.Text.Encoding.UTF8, "application/json"));
+            
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert: Check that the response status is 404 Not Found
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Equal("Simulation Not Found", respError?.ErrorType); // Example error message
+        }
+
+        [Fact]
+        public async Task Duplicate_LGD_Simulation_BadRequest()
+        {
+            // Arrange: Provide an invalid lgd simulation ID or name (e.g., empty name)
+            long lgdSimulationId = -1; // Example invalid lgd simulation ID (negative value)
+            string lgdSimulationName = ""; // Example invalid lgd simulation name (empty string)
+
+            var requestBody = new DuplicateLgdSimulationCommand(lgdSimulationId, lgdSimulationName);
+
+            // Act: Send the POST request to the API
+            var response = await _client.PostAsync(ApiRouteConstants.SimulationRoutes.DuplicateLGDSimulation,
+                new StringContent(JsonConvert.SerializeObject(requestBody), System.Text.Encoding.UTF8, "application/json"));
+            
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert: Check that the response status is 400 BadRequest due to invalid parameters
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("Bad Request", respError?.ErrorType); // Example error message
+        }
+    }
+}
