@@ -1,0 +1,58 @@
+using System.Net;
+using System.Net.Http.Json;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.SimulationAccess
+{
+    public class GetSimulationAccessTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client;
+
+        public GetSimulationAccessTests(CrewWebApplicationFactory<Program> factory)
+        {
+            _client = factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+        }
+
+        [Fact]
+        public async Task GetSimulationAccess_ValidSimulationId_ReturnsSimulationAccessList()
+        {
+            // Arrange
+            long simulationId = 12345;
+
+            // Act
+            var response = await _client.GetAsync($"/api/simulationaccess/{simulationId}");
+
+            // Assert
+            response.EnsureSuccessStatusCode();
+            var result = await response.Content.ReadFromJsonAsync<GetSimulationAccessResponse>();
+            Assert.NotNull(result);
+            Assert.NotEmpty(result.Users);
+        }
+
+        [Fact]
+        public async Task GetSimulationAccess_InvalidSimulationId_ReturnsNotFound()
+        {
+            // Arrange
+            long invalidSimulationId = 999999;
+
+            // Act
+            var response = await _client.GetAsync($"/api/simulationaccess/{invalidSimulationId}");
+
+            // Assert
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task GetSimulationAccess_MissingSimulationId_ReturnsBadRequest()
+        {
+            // Act
+            var response = await _client.GetAsync("/api/simulationaccess");
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+    }
+}
