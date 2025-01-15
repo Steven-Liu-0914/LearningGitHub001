@@ -1,0 +1,85 @@
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.Calculation.Model.GetPiMonthly;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Text;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Calculation
+{
+    public class GetPiMonthlyTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task GetPiMonthly_Success()
+        {
+            // Arrange
+            var request = new GetPiMonthlyRequest
+            {
+                DeviceId = 1001,
+                Level = "Portfolio",
+                EntityId = "Entity123"
+            };
+            var query = CreateQueryString(request);
+
+            // Act
+            var response = await _client.GetAsync($"{ApiRouteConstants.CalculationRoutes.GetPiMonthly}?{query}");
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<GetPiMonthlyResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(result);
+            Assert.NotEmpty(result.MonthlyData); // Adjust assertion based on `GetPiMonthlyResponse` structure
+        }
+
+        [Fact]
+        public async Task GetPiMonthly_BadRequest()
+        {
+            // Arrange
+            var query = "DeviceId=0&Level=InvalidLevel"; // Invalid DeviceId and Level
+
+            // Act
+            var response = await _client.GetAsync($"{ApiRouteConstants.CalculationRoutes.GetPiMonthly}?{query}");
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Contains("Validation Error", responseContent); // Adjust based on actual error message
+        }
+
+        [Fact]
+        public async Task GetPiMonthly_NotFound()
+        {
+            // Arrange
+            var request = new GetPiMonthlyRequest
+            {
+                DeviceId = 9999, // Non-existent DeviceId
+                Level = "Portfolio",
+                EntityId = "InvalidEntity"
+            };
+            var query = CreateQueryString(request);
+
+            // Act
+            var response = await _client.GetAsync($"{ApiRouteConstants.CalculationRoutes.GetPiMonthly}?{query}");
+            var responseContent = await response.Content.ReadAsStringAsync();
+
+            // Assert
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+            Assert.Contains("No data found", responseContent); // Adjust based on actual error message
+        }
+
+        private string CreateQueryString(GetPiMonthlyRequest request)
+        {
+            var queryParams = new List<string>
+            {
+                $"DeviceId={request.DeviceId}",
+                $"Level={request.Level}",
+                $"EntityId={request.EntityId}"
+            };
+            return string.Join("&", queryParams.Where(q => !string.IsNullOrWhiteSpace(q)));
+        }
+    }
+}
