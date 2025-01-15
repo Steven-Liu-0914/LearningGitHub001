@@ -1,0 +1,93 @@
+using System.Net;
+using System.Net.Http.Json;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Calculation
+{
+    public class GetPiCalculationResultTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client;
+
+        public GetPiCalculationResultTests(CrewWebApplicationFactory<Program> factory)
+        {
+            _client = factory.CreateClient(new WebApplicationFactoryClientOptions
+            {
+                AllowAutoRedirect = false
+            });
+        }
+
+        [Fact]
+        public async Task ComputePI_ValidRequest_ReturnsSuccessfulResponse()
+        {
+            // Arrange
+            var request = new GetPiCalculationRequest
+            {
+                CreditfileId = 12345,  // Example valid credit file ID
+                DeviceId = 67890  // Example valid device ID
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync($"/api/calculation/compute-pi", request);
+
+            // Assert
+            response.EnsureSuccessStatusCode(); // Ensure the status code is 200 OK
+            var result = await response.Content.ReadFromJsonAsync<BaseResponse>();
+            Assert.NotNull(result);
+            Assert.True(result.Data); // Assuming true means success
+        }
+
+        [Fact]
+        public async Task ComputePI_InvalidRequest_ReturnsBadRequest()
+        {
+            // Arrange
+            var invalidRequest = new GetPiCalculationRequest
+            {
+                CreditfileId = 0,  // Invalid credit file ID
+                DeviceId = 0  // Invalid device ID
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync($"/api/calculation/compute-pi", invalidRequest);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task ComputePI_CalculationNotFound_ReturnsNotFound()
+        {
+            // Arrange
+            var request = new GetPiCalculationRequest
+            {
+                CreditfileId = 12345,  // Valid credit file ID
+                DeviceId = 67890  // Example device ID that might not have a calculation result
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync($"/api/calculation/compute-pi", request);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task ComputePI_SimulationError_ReturnsCustomError()
+        {
+            // Arrange
+            var request = new GetPiCalculationRequest
+            {
+                CreditfileId = 12345,  // Example valid credit file ID
+                DeviceId = 67890  // Device ID that may cause a simulation error
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync($"/api/calculation/compute-pi", request);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            var result = await response.Content.ReadFromJsonAsync<BaseResponse>();
+            Assert.NotNull(result);
+            // Here, you would assert for the specific error message raised (PI-CAL-002 or similar)
+        }
+    }
+}
