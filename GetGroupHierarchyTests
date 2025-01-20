@@ -1,0 +1,64 @@
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.Unicorn.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Net.Http.Json;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Unicorn
+{
+    public class GetGroupHierarchyTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Get_GroupHierarchy_Success_Response()
+        {
+            // Arrange
+            string requestUri = ApiRouteConstants.CrewUnicornRoutes.GetGroupHierarchy;
+            var requestPayload = new GroupHierarchyRequest
+            {
+                // Populate with valid request data
+                GroupId = "ValidGroupId",
+                IncludeDetails = true
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync(requestUri, requestPayload);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<GroupHierarchyResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.NotNull(respData?.Hierarchy);
+            Assert.True(respData.Hierarchy.Count > 0);
+        }
+
+        [Fact]
+        public async Task Get_GroupHierarchy_Validator_Failure()
+        {
+            // Arrange
+            string requestUri = ApiRouteConstants.CrewUnicornRoutes.GetGroupHierarchy;
+            var invalidRequestPayload = new GroupHierarchyRequest
+            {
+                // Populate with invalid data to simulate validation failure
+                GroupId = null, // Required field is null
+                IncludeDetails = true
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync(requestUri, invalidRequestPayload);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+            Assert.Contains("GroupId", respError?.Errors.Keys); // Check that "GroupId" validation failure is reported
+        }
+    }
+}
