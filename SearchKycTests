@@ -1,0 +1,65 @@
+using CACIB.CREW.Api.Features.Unicorn.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.Unicorn
+{
+    public class SearchKycTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Post_SearchKyc_Success_Response()
+        {
+            // Arrange
+            var kycRequest = new KycSearchRequest
+            {
+                // Fill with valid test data for KycSearchRequest
+                // Example:
+                Name = "John Doe",
+                Country = "US",
+                DateOfBirth = "1990-01-01"
+            };
+            var requestUri = "/api/unicorn/kyc/search";  // Adjust the route based on your actual API
+
+            // Act
+            var response = await _client.PostAsJsonAsync(requestUri, kycRequest);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<KycSearchResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            // Add more assertions based on the response structure (e.g., checking if the KYC details are returned)
+        }
+
+        [Fact]
+        public async Task Post_SearchKyc_Validator_Failure()
+        {
+            // Arrange
+            var kycRequest = new KycSearchRequest
+            {
+                // Example of invalid data
+                Name = "",  // Empty name triggers validation failure
+                Country = "US",
+                DateOfBirth = "1990-01-01"
+            };
+            var requestUri = "/api/unicorn/kyc/search";  // Adjust the route based on your actual API
+
+            // Act
+            var response = await _client.PostAsJsonAsync(requestUri, kycRequest);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+            Assert.Contains("Name", respError?.Errors.Keys); // Ensure "Name" validation is triggered
+        }
+    }
+}
