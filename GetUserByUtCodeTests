@@ -1,0 +1,53 @@
+using CACIB.CREW.Api.Features.UserAccess.Model.DTO.ResponseDto;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.UserAccess
+{
+    public class GetUserByUtCodeTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Get_UserByUtCode_Success_Response()
+        {
+            // Arrange
+            string utCode = "valid-ut-code";  // Replace with an actual valid utCode
+            var requestUri = $"/api/useraccess/utcode/{utCode}";  // Adjust based on the actual route
+
+            // Act
+            var response = await _client.GetAsync(requestUri);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<GetUserByUtCodeResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.NotNull(respData.Data); // Assuming `Data` is the user response object
+            Assert.Equal(utCode, respData.Data.UtCode); // Check if the correct UtCode is returned
+        }
+
+        [Fact]
+        public async Task Get_UserByUtCode_Validator_Failure()
+        {
+            // Arrange
+            string utCode = "invalid-ut-code";  // Invalid utCode to trigger validation failure
+            var requestUri = $"/api/useraccess/utcode/{utCode}";  // Adjust based on the actual route
+
+            // Act
+            var response = await _client.GetAsync(requestUri);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+            Assert.Contains("utCode", respError?.Errors.Keys); // Check for "utCode" validation
+        }
+    }
+}
