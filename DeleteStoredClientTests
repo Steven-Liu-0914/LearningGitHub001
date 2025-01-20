@@ -1,0 +1,55 @@
+using CACIB.CREW.Api.Core.Route;
+using CREW.Core.Models.Response;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.StoredClient
+{
+    public class DeleteStoredClientTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Delete_StoredClient_Success_Response()
+        {
+            // Arrange
+            int clientId = 1; // Replace with a valid client ID
+            string clientType = "TestType";
+
+            string requestUri = $"{ApiRouteConstants.SimulationRoutes.DeleteStoredClient}?id={clientId}&type={clientType}";
+
+            // Act
+            var response = await _client.DeleteAsync(requestUri);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<BaseResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.True(respData?.Data != null && (bool)respData.Data);
+        }
+
+        [Fact]
+        public async Task Delete_StoredClient_InvalidParameters_Response()
+        {
+            // Arrange
+            int invalidClientId = -1; // Invalid client ID
+            string invalidClientType = "";
+
+            string requestUri = $"{ApiRouteConstants.SimulationRoutes.DeleteStoredClient}?id={invalidClientId}&type={invalidClientType}";
+
+            // Act
+            var response = await _client.DeleteAsync(requestUri);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+        }
+    }
+}
