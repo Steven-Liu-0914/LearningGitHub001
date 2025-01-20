@@ -1,0 +1,50 @@
+using CACIB.CREW.Api.Features.TextContent.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.TextContent
+{
+    public class GetTextContentsTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Get_TextContents_Success_Response()
+        {
+            // Arrange
+            var requestUri = "/api/textcontent";  // Adjust based on the actual route
+
+            // Act
+            var response = await _client.GetAsync(requestUri);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<GetTextContentResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.True(respData.TextContents.Count > 0); // Assuming TextContents is the data list
+        }
+
+        [Fact]
+        public async Task Get_TextContents_Validator_Failure()
+        {
+            // Arrange
+            var requestUri = "/api/textcontent?scope=invalid"; // Invalid parameter to trigger validation failure
+
+            // Act
+            var response = await _client.GetAsync(requestUri);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+            Assert.Contains("scope", respError?.Errors.Keys); // Check for "scope" validation
+        }
+    }
+}
