@@ -1,0 +1,61 @@
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.StringResource.Model;
+using CREW.Core.Models.Response;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Net.Http.Json;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace CACIB.CREW.IntegrationTests.Features.StringResource
+{
+    public class CreateStringResourceTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Create_StringResource_Success_Response()
+        {
+            // Arrange
+            var request = new StringResourceDto
+            {
+                Key = "TestKey",
+                Value = "TestValue",
+                Language = "en",
+                CreatedBy = "IntegrationTest"
+            };
+
+            // Act
+            var response = await _client.PostAsJsonAsync(ApiRouteConstants.StringResourceRoutes.Create, request);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<BaseResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.True(respData != null && respData.IsSuccess);
+        }
+
+        [Fact]
+        public async Task Create_StringResource_MissingParameter_Validator_Failure()
+        {
+            // Arrange
+            var request = new StringResourceDto
+            {
+                Value = "TestValue"
+                // Missing Key and Language fields
+            };
+            var content = new StringContent(JsonConvert.SerializeObject(request), Encoding.UTF8, "application/json");
+
+            // Act
+            var response = await _client.PostAsync(ApiRouteConstants.StringResourceRoutes.Create, content);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.UnprocessableContent, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+        }
+    }
+}
