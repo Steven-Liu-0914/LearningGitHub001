@@ -1,0 +1,62 @@
+using CACIB.CREW.Api.Features.StringResource.Model;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Net;
+using System.Net.Http;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.StringResource
+{
+    public class UpdateStringResourceTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Put_UpdateStringResource_Success_Response()
+        {
+            // Arrange
+            var stringResourceRequest = new StringResourceDto
+            {
+                Value = "Updated String Resource",
+                // Add other properties as necessary
+            };
+
+            var requestUri = "/api/string-resource/{type}/{key}/{cultureCode}"; // Adjust the route as needed, substitute {type}, {key}, and {cultureCode}
+
+            // Act
+            var response = await _client.PutAsJsonAsync(requestUri, stringResourceRequest);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<BaseResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.True(respData?.IsSuccess);  // Assuming BaseResponse contains IsSuccess property
+        }
+
+        [Fact]
+        public async Task Put_UpdateStringResource_Validator_Failure()
+        {
+            // Arrange
+            var stringResourceRequest = new StringResourceDto
+            {
+                Value = "",  // Invalid value, assuming non-empty values are required
+                // Add other invalid properties as necessary
+            };
+
+            var requestUri = "/api/string-resource/{type}/{key}/{cultureCode}";  // Adjust the route
+
+            // Act
+            var response = await _client.PutAsJsonAsync(requestUri, stringResourceRequest);
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var respError = JsonConvert.DeserializeObject<ErrorResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.NotNull(respError);
+            Assert.Equal("Validation Error", respError?.ErrorType);
+            Assert.Contains("Value", respError?.Errors.Keys);  // Check if the validation error is for the "Value" field
+        }
+    }
+}
