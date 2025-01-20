@@ -1,0 +1,53 @@
+using CACIB.CREW.Api.Core.Route;
+using CACIB.CREW.Api.Features.UserAccess.Model.DTO;
+using CACIB.CREW.Api.Features.UserAccess.Model.Response;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Net;
+using System.Threading.Tasks;
+using Xunit;
+
+namespace CACIB.CREW.IntegrationTests.Features.UserAccess
+{
+    public class GetAllRoleMastersTests(CrewWebApplicationFactory<Program> factory) : IClassFixture<CrewWebApplicationFactory<Program>>
+    {
+        private readonly HttpClient _client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        [Fact]
+        public async Task Get_AllRoleMasters_Success_Response()
+        {
+            // Arrange
+            string requestUri = ApiRouteConstants.UserAccessRoutes.GetAllRoleMasters;
+
+            // Act
+            var response = await _client.GetAsync(requestUri);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<GetAllRoleMastersResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.NotNull(respData);
+            Assert.NotNull(respData?.Data);
+            Assert.True(respData.Data.Count > 0);
+        }
+
+        [Fact]
+        public async Task Get_AllRoleMasters_NoRoles_Failure_Response()
+        {
+            // Arrange
+            // Assuming the database or service is configured to return no roles
+            string requestUri = ApiRouteConstants.UserAccessRoutes.GetAllRoleMasters;
+
+            // Act
+            var response = await _client.GetAsync(requestUri);
+            string responseContent = await response.Content.ReadAsStringAsync();
+            var respData = JsonConvert.DeserializeObject<GetAllRoleMastersResponse>(responseContent);
+
+            // Assert
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode); // Endpoint returns 200 OK even for empty data
+            Assert.NotNull(respData);
+            Assert.Empty(respData.Data);
+        }
+    }
+}
