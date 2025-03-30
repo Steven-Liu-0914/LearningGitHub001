@@ -1,0 +1,36 @@
+import { Validators } from '@angular/forms';
+import { toForm } from '@crew/shared/util-form';
+
+import { createLiquidityData } from '../model/liquidity-data';
+
+export const injectLiquidityDataForm = () => {
+  const model = createLiquidityData();
+  const form = toForm(model, {
+    liqProductTypeId: [null as number | null],
+    isRevolvingCredit: [null as boolean | null],
+    creditClaimsPledgedToCentralBanksId: [null as number | null],
+    overriddenStepUpInMonths: [
+      null as number | null,
+      [
+        model.liqProductTypeId !== null && model.liqProductTypeId === 1
+          ? Validators.required
+          : Validators.nullValidator,
+      ],
+    ],
+    isBackupLine: [null as boolean | null],
+    isNoticePeriod: [null as boolean | null],
+    overriddenProbabilityInPercentage: [
+      null as number | null,
+      [
+        model.liqProductTypeId !== null && model.liqProductTypeId === 1
+          ? Validators.required
+          : Validators.nullValidator,
+      ],
+    ],
+    indexReferenceId: [null as string | null],
+    ratingTrigger: [null as number | null],
+  });
+  form.controls.overriddenStepUpInMonths.disable();
+  form.controls.overriddenProbabilityInPercentage.disable();
+  return form;
+};
